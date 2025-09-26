@@ -20,11 +20,16 @@ def pipeline():
         return str(base)
 
     @task()
+    def etl(base_dir: str):
+        from src.etl import build_dataset
+        # genera /opt/airflow/data/df.pkl a partir de raw CSVs
+        return build_dataset(base_dir)
+
+    @task()
     def split(base_dir: str):
         from src.data_utils import load_df
         from src.preprocess import split_train_test
         import joblib
-
         df = load_df()
         Xtr, Xte, ytr, yte, train_idx, test_idx = split_train_test(df)
         joblib.dump((Xtr, Xte, ytr, yte), f"{base_dir}/processed/splits.joblib")
@@ -44,6 +49,7 @@ def pipeline():
         dump_report(artifacts["metrics"])
         return artifacts["model_path"]
 
-    report(train_eval(split(load_paths())))
+    base = load_paths()
+    report(train_eval(split(etl(base))))
 
 pipeline()

@@ -1,8 +1,9 @@
-# Trabajo Práctico Final de Aprendizaje de Máquina  
-**Pipeline de Machine Learning con Apache Airflow y FastAPI**
+# Trabajo Práctico Final de Aprendizaje de Máquina
+**Pipeline de Machine Learning con Apache Airflow, MLflow y FastAPI**
 
-Este repositorio contiene la implementación del Trabajo Práctico Final de Aprendizaje de Máquina.  
-El proyecto integra un pipeline de Machine Learning orquestado con **Apache Airflow** y expone un servicio de predicción a través de **FastAPI**, todo desplegado en contenedores mediante **Docker Compose**.
+Este repositorio contiene la migración del Trabajo Práctico Final de Aprendizaje de Máquina a un ambiente modular y productivo.  
+Incluye un pipeline de datos y entrenamiento orquestado con **Apache Airflow**, un servicio de predicción mediante **FastAPI**, y experimentos de búsqueda de hiperparámetros registrados en **MLflow**.  
+Todo se despliega con **Docker Compose**.
 
 ---
 
@@ -10,114 +11,118 @@ El proyecto integra un pipeline de Machine Learning orquestado con **Apache Airf
 
 ```
 .
-├── airflow/                 # Configuración e imagen de Airflow
-│   ├── dags/                # Definición de DAGs
-│   │   └── tp_final_ml_dag.py
-│   ├── dockerfiles/         # Dockerfile extendido de Airflow
-│   ├── logs/                # Volumen de logs
-│   ├── plugins/             # Plugins opcionales
-│   └── requirements.txt     # Dependencias adicionales de Python
+├── airflow/                     # Configuración e imagen de Airflow
+│   ├── dags/
+│   │   └── tp_final_ml_dag.py   # DAG principal (etl → split → train_eval → report)
+│   ├── dockerfiles/
+│   │   └── airflow.Dockerfile   # Imagen extendida de Airflow
+│   ├── logs/                    # Logs de Airflow
+│   ├── plugins/                 # Plugins opcionales
+│   └── requirements.txt         # Dependencias adicionales de Airflow
 │
-├── api/                     # Servicio FastAPI para predicciones
-│   ├── app.py
-│   ├── requirements.txt
-│   └── Dockerfile
+├── api/                         # Servicio FastAPI para predicción
+│   ├── app.py                   # API con endpoint POST /predict
+│   ├── requirements.txt         # Dependencias del servicio API
+│   └── Dockerfile               # Imagen de FastAPI
 │
-├── src/                     # Código fuente del pipeline
-│   ├── data_utils.py        # Carga de datos
-│   ├── preprocess.py        # Preprocesamiento y división en train/test
-│   ├── train.py             # Entrenamiento y evaluación del modelo
-│   ├── evaluate.py          # Reporte de métricas
-│   └── predict_batch.py     # Predicciones batch
+├── src/                         # Código fuente del pipeline
+│   ├── etl.py                   # ETL exacto migrado desde la notebook
+│   ├── data_utils.py            # Utilidades de carga de df.pkl y features
+│   ├── preprocess.py            # Split train/test
+│   ├── train.py                 # Entrenamiento y logging en MLflow
+│   ├── evaluate.py              # Reporte de métricas
+│   └── predict_batch.py         # Predicción batch opcional
 │
-├── data/                    # Datos y artefactos
-│   ├── raw/                 # Datos de entrada
-│   ├── processed/           # Datos intermedios
-│   ├── models/              # Modelos entrenados y métricas
-│   └── predictions/         # Resultados de predicciones batch
+├── data/                        # Carpeta compartida entre servicios
+│   ├── raw/                     # CSV crudos (entrada: productos.csv, sucursales.csv, comercio.csv)
+│   ├── processed/               # Datos procesados (splits, métricas)
+│   ├── models/                  # Modelos entrenados y métricas finales
+│   └── predictions/             # Predicciones batch
 │
-├── reference_notebook/      # Notebook original de referencia
-│   └── Aprendizaje_Maquina.ipynb
+├── mlruns/                      # Experimentos registrados en MLflow
 │
-├── docker-compose.yml       # Orquestación de servicios
-├── .env                     # Variables de entorno
-└── README.md                # Documentación del proyecto
+├── reference_notebook/          # Notebook original como referencia
+│   └── Aprendizaje_de_maquina_Proyecto_Final.ipynb
+│
+├── docker-compose.yml           # Orquestación de Airflow, API y MLflow
+├── .env                         # Variables de entorno (UID, MLFLOW_TRACKING_URI, etc.)
+└── README.md                    # Documentación del proyecto
 ```
 
 ---
 
-## Requisitos previos
+## Flujo de trabajo (Airflow)
 
-- [Docker](https://docs.docker.com/get-docker/)  
-- [Docker Compose](https://docs.docker.com/compose/install/)  
+1. **ETL (`etl.py`)**:
+  - Lee los CSV crudos desde `data/raw/`.
+  - Construye `df.pkl` replicando las transformaciones de la notebook:
+    - Filtrado de promociones.
+    - Cálculo de `descuento`.
+    - Preparación de `sucursales` y `comercio`.
+    - Merge final y mapeo de provincias.
 
----
+2. **Split (`preprocess.py`)**:
+  - Genera `data/processed/splits.joblib` con train/test.
 
-## Preparación de los datos
+3. **Entrenamiento y evaluación (`train.py`)**:
+  - Entrena el modelo con GridSearchCV.
+  - Registra parámetros, métricas y artefactos en **MLflow**.
+  - Persiste el modelo en `data/models/model.joblib` y métricas en `data/models/metrics.json`.
 
-El pipeline espera **una de las siguientes opciones** en el directorio `data/`:
-
-1. Un archivo **`df.pkl`** que contenga las columnas:  
-   - `id_bandera`  
-   - `productos_marca`  
-   - `productos_precio_lista`  
-   - `descuento`  
-
-2. Los archivos crudos en `data/raw/`:  
-   - `comercio.csv`  
-   - `productos.csv`  
-   - `sucursales.csv`  
-
-El script `src/data_utils.py` intentará cargar `df.pkl` en primer lugar. Si no está disponible, construirá un dataset mínimo a partir de los CSV.
+4. **Reporte (`evaluate.py`)**:
+  - Copia métricas a `data/processed/metrics.json`.
 
 ---
 
-## Instrucciones de despliegue
+## Servicios y puertos
 
-1. Construir las imágenes:
+- **Airflow Webserver:** [http://localhost:8080](http://localhost:8080)  
+  Usuario: `admin` — Contraseña: `admin`
+
+- **MLflow Tracking UI:** [http://localhost:5001](http://localhost:5001)
+
+- **FastAPI (servicio de predicción):** [http://localhost:8000](http://localhost:8000)
+
+---
+
+## Despliegue
+
+1. Construir imágenes:
    ```bash
    docker compose build
    ```
 
-2. Inicializar la base de datos y crear el usuario administrador:
+2. Inicializar Airflow:
    ```bash
    docker compose up airflow-init
    ```
 
-3. Levantar todos los servicios en segundo plano:
+3. Levantar todos los servicios:
    ```bash
    docker compose up -d
    ```
 
 ---
 
-## Acceso a los servicios
-
-- **Airflow Webserver:** [http://localhost:8080](http://localhost:8080)  
-  Usuario: `admin`  
-  Contraseña: `admin`
-
-- **API de predicción (FastAPI):** [http://localhost:8000](http://localhost:8000)  
-
----
-
 ## Ejecución del pipeline
 
-1. Ingresar a la interfaz de Airflow.  
-2. Activar el DAG **`tp_final_ml_pipeline`**.  
-3. Ejecutar el DAG de manera manual o esperar a la programación diaria (`@daily`).  
+1. Ingresar a la interfaz de Airflow.
+2. Activar el DAG `tp_final_ml_pipeline`.
+3. Ejecutarlo manualmente o esperar la ejecución programada.
 
-El modelo entrenado se almacenará en:  
-- `data/models/model.joblib`  
-- Métricas en `data/models/metrics.json`  
+Los artefactos generados incluyen:
+- `data/df.pkl` (dataset procesado)
+- `data/models/model.joblib` (modelo entrenado)
+- `data/models/metrics.json` (métricas del modelo)
+- Registro completo en **MLflow** (`./mlruns` + UI en puerto 5001)
 
 ---
 
-## Uso de la API de predicción
+## Uso de la API
 
-La API carga el modelo entrenado y expone un endpoint `POST /predict`.
+La API expone un endpoint `POST /predict` que recibe los atributos principales y devuelve la predicción de descuento.
 
-### Ejemplo de solicitud:
+### Ejemplo
 
 ```bash
 curl -X POST http://localhost:8000/predict   -H "Content-Type: application/json"   -d '{
@@ -127,11 +132,11 @@ curl -X POST http://localhost:8000/predict   -H "Content-Type: application/json"
   }'
 ```
 
-### Respuesta esperada:
+Respuesta esperada:
 
 ```json
 {
-  "descuento_pred": 0.1234
+  "descuento_pred": 15.23
 }
 ```
 
@@ -139,12 +144,7 @@ curl -X POST http://localhost:8000/predict   -H "Content-Type: application/json"
 
 ## Notas adicionales
 
-- Si se cambian las características utilizadas, deben actualizarse en `src/data_utils.py` y `src/train.py` (listas `FEAT_COLS`, `CATEGORICAL`, `NUMERIC`).  
-- Los datasets intermedios se guardan en `/opt/airflow/data/processed/` para evitar transferencias grandes vía XCom.  
-- En caso de problemas de permisos en `airflow/logs` o `data/`, ejecutar:
-  ```bash
-  sudo chown -R 50000:0 airflow/logs data
-  ```
-- El proyecto está diseñado para entornos de desarrollo. Para entornos productivos se recomienda revisar la documentación oficial de Airflow y FastAPI, así como implementar medidas adicionales de seguridad y monitoreo.
-
----
+- La lógica del ETL replica fielmente la notebook entregada.
+- El modelo se entrena y evalúa dentro de un Pipeline de `scikit-learn` para garantizar consistencia entre entrenamiento y predicción.
+- Si los CSV no están presentes en `data/raw/`, el ETL genera un dataset vacío para que el DAG no falle.
+- Para entornos productivos se recomienda asegurar persistencia de `mlruns/` en un almacenamiento remoto y configurar seguridad en Airflow y FastAPI.
