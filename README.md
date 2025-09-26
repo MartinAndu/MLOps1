@@ -93,6 +93,26 @@ Todo se despliega con **Docker Compose**.
 
 ---
 
+
+## Uso con Makefile
+
+Para simplificar el ciclo de vida de los contenedores, este proyecto incluye un `Makefile` con los siguientes comandos:
+
+```bash
+# Construye las imágenes de Airflow (sin usar caché)
+make build
+
+# Inicializa la base de datos de Airflow y crea usuario admin/admin
+make init
+
+# Levanta todos los servicios en segundo plano
+make up
+
+# Reinicia solo los contenedores de Airflow (webserver y scheduler)
+make restart
+
+
+
 ## Servicios y puertos
 
 - **Airflow Webserver:** [http://localhost:8080](http://localhost:8080)  
