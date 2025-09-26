@@ -3,7 +3,7 @@ from airflow.decorators import dag, task
 
 @dag(
     dag_id="tp_final_ml_pipeline",
-    schedule="@daily",
+    schedule=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=["tp-final", "ml"],
