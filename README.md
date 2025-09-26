@@ -54,34 +54,23 @@ Todo se despliega con **Docker Compose**.
 ## Flujo de trabajo (Airflow)
 
 1. **ETL (`etl.py`)**:
-  - Lee los CSV crudos desde `data/raw/`.
-  - Construye `df.pkl` replicando las transformaciones de la notebook:
-    - Filtrado de promociones.
-    - Cálculo de `descuento`.
-    - Preparación de `sucursales` y `comercio`.
-    - Merge final y mapeo de provincias.
+    - Lee los CSV crudos desde `data/raw/`.
+    - Construye `df.pkl` replicando las transformaciones de la notebook:
+        - Filtrado de promociones.
+        - Cálculo de `descuento`.
+        - Preparación de `sucursales` y `comercio`.
+        - Merge final y mapeo de provincias.
 
 2. **Split (`preprocess.py`)**:
-  - Genera `data/processed/splits.joblib` con train/test.
+    - Genera `data/processed/splits.joblib` con train/test.
 
 3. **Entrenamiento y evaluación (`train.py`)**:
-  - Entrena el modelo con GridSearchCV.
-  - Registra parámetros, métricas y artefactos en **MLflow**.
-  - Persiste el modelo en `data/models/model.joblib` y métricas en `data/models/metrics.json`.
+    - Entrena el modelo con GridSearchCV.
+    - Registra parámetros, métricas y artefactos en **MLflow**.
+    - Persiste el modelo en `data/models/model.joblib` y métricas en `data/models/metrics.json`.
 
 4. **Reporte (`evaluate.py`)**:
-  - Copia métricas a `data/processed/metrics.json`.
-
----
-
-## Servicios y puertos
-
-- **Airflow Webserver:** [http://localhost:8080](http://localhost:8080)  
-  Usuario: `admin` — Contraseña: `admin`
-
-- **MLflow Tracking UI:** [http://localhost:5001](http://localhost:5001)
-
-- **FastAPI (servicio de predicción):** [http://localhost:8000](http://localhost:8000)
+    - Copia métricas a `data/processed/metrics.json`.
 
 ---
 
@@ -103,6 +92,26 @@ Todo se despliega con **Docker Compose**.
    ```
 
 ---
+
+## Servicios y puertos
+
+- **Airflow Webserver:** [http://localhost:8080](http://localhost:8080)  
+  Usuario: `admin` — Contraseña: `admin`
+
+- **MLflow Tracking UI:** [http://localhost:5001](http://localhost:5001)
+
+- **FastAPI (servicio de predicción):** [http://localhost:8000](http://localhost:8000)
+
+---
+
+## Modificar algo de forma local
+
+Despues de corregir correr
+
+   ```bash
+   docker compose restart airflow-webserver airflow-scheduler 
+   ```
+
 
 ## Ejecución del pipeline
 
