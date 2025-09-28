@@ -51,6 +51,14 @@ Todo se despliega con **Docker Compose**.
 
 ---
 
+
+## Descripción del modelo
+
+El modelo implementado en este trabajo utiliza datos de **productos, sucursales y comercios** para predecir el **porcentaje de descuento aplicado a un producto en promoción**.
+
+En otras palabras, a partir de información como la marca del producto, el precio de lista, la sucursal y el tipo de comercio, el modelo estima cuánto representa el descuento sobre el precio final. Esta predicción permite analizar patrones de promociones y entender cómo varían los descuentos según diferentes características del producto y del punto de venta.
+
+
 ## Flujo de trabajo (Airflow)
 
 1. **ETL (`etl.py`)**:
