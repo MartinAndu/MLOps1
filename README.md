@@ -177,3 +177,36 @@ Respuesta esperada:
 - El modelo se entrena y evalúa dentro de un Pipeline de `scikit-learn` para garantizar consistencia entre entrenamiento y predicción.
 - Si los CSV no están presentes en `data/raw/`, el ETL genera un dataset vacío para que el DAG no falle.
 - Para entornos productivos se recomienda asegurar persistencia de `mlruns/` en un almacenamiento remoto y configurar seguridad en Airflow y FastAPI.
+
+---
+
+## Pendientes para cumplir con el enunciado del TP
+
+Actualmente el proyecto está en proceso de integración con Apache Airflow.  
+Los siguientes puntos aún no están finalizados y se deben resolver para cumplir con los requisitos mínimos:
+
+1. **Ejecución del DAG**
+   - El DAG `tp_final_ml_pipeline` todavía no corre de manera exitosa en Airflow.
+   - El scheduler no se encuentra funcionando correctamente (problemas de inicialización de la base de datos).
+   - Es necesario lograr que al menos una corrida completa del DAG se ejecute de inicio a fin.
+
+2. **MLflow – Búsqueda de hiperparámetros**
+   - Se debe agregar la configuración de un experimento en MLflow para registrar ejecuciones de búsqueda de hiperparámetros.
+   - Actualmente MLflow está levantado, pero no se está integrando desde el código del DAG ni del modelo.
+
+3. **API REST – Servir el modelo**
+   - El servicio FastAPI está configurado y expuesto, pero falta garantizar que efectivamente cargue y sirva el modelo entrenado en el DAG.
+   - Debe poder responder a solicitudes de predicción usando el modelo generado en el pipeline.
+
+4. **Documentación y limpieza final**
+   - Incluir docstrings y comentarios explicativos en todos los scripts (`etl.py`, `train.py`, etc.).
+   - Validar que la documentación automática de FastAPI refleje correctamente los parámetros de entrada y salida del modelo.
+   - Ajustar el `README.md` final con las instrucciones completas de instalación, ejecución de Airflow, MLflow y API.
+
+---
+
+## Integrantes
+
+- **a2110 – Ceballos, Luciano**
+- **a2102 – Andújar, Martín Rodrigo**
+- **a2125 – Otonelo Canale, Nahuel Elías**
