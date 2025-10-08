@@ -1,23 +1,19 @@
 version: "3.8"
 
 x-airflow-common: &airflow-common
-  image: apache/airflow:2.9.3
   build:
     context: .
-    dockerfile: Dockerfile.airflow
+    dockerfile: airflow/dockerfiles/airflow.Dockerfile
   env_file: .env
   environment:
-    &airflow-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__CORE__LOAD_EXAMPLES: "False"
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
     AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "True"
-    # (opcional) usuario/clave por defecto que crea airflow-init
     _AIRFLOW_WWW_USER_USERNAME: admin
     _AIRFLOW_WWW_USER_PASSWORD: admin
-  command: bash -c "pip install --no-cache-dir -r /opt/airflow/requirements.txt && exec airflow webserver"
+    PYTHONPATH: /opt/airflow:/opt/airflow/src
   volumes:
-    - ./airflow/requirements.txt:/opt/airflow/requirements.txt
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
     - ./airflow/plugins:/opt/airflow/plugins
@@ -44,13 +40,13 @@ services:
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
     ports:
-      - "5433:5432" # libre local
+      - "5433:5432"
 
   airflow-init:
     <<: *airflow-common
     entrypoint: /bin/bash
     command:
-      - -c
+      - -lc
       - |
         set -e
         airflow db migrate
@@ -59,21 +55,13 @@ services:
           --password "$${_AIRFLOW_WWW_USER_PASSWORD}" \
           --firstname Admin --lastname Admin --role Admin \
           --email admin@example.com
-    depends_on:
-      postgres:
-        condition: service_healthy
     restart: "no"
 
   airflow-webserver:
     <<: *airflow-common
-    command: webserver
+    command: ["bash","-lc","airflow webserver"]
     ports:
       - "8080:8080"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
-      interval: 10s
-      retries: 5
-      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
@@ -82,7 +70,7 @@ services:
 
   airflow-scheduler:
     <<: *airflow-common
-    command: scheduler
+    command: ["bash","-lc","airflow scheduler"]
     depends_on:
       postgres:
         condition: service_healthy
