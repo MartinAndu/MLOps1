@@ -1,5 +1,12 @@
 from datetime import datetime
 from airflow.decorators import dag, task
+import os, sys, pathlib
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]  # /opt/airflow
+SRC  = ROOT / "src"
+if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
+if str(SRC)  not in sys.path: sys.path.insert(0, str(SRC))
+
 
 @dag(
     dag_id="tp_final_ml_pipeline",

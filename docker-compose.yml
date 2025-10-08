@@ -1,32 +1,33 @@
 version: "3.8"
 
 x-airflow-common: &airflow-common
+  image: apache/airflow:2.9.3
   build:
     context: .
-    dockerfile: ./airflow/dockerfiles/airflow.Dockerfile
-  env_file:
-    - .env
+    dockerfile: Dockerfile.airflow
+  env_file: .env
   environment:
-    PYTHONPATH: /opt/airflow:/opt/airflow/src
+    &airflow-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "True"
-    AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-    AIRFLOW__WEBSERVER__WEB_SERVER_PORT: 8080
-    AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-    MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI}
-
+    AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "True"
+    # (opcional) usuario/clave por defecto que crea airflow-init
+    _AIRFLOW_WWW_USER_USERNAME: admin
+    _AIRFLOW_WWW_USER_PASSWORD: admin
+  command: bash -c "pip install --no-cache-dir -r /opt/airflow/requirements.txt && exec airflow webserver"
   volumes:
+    - ./airflow/requirements.txt:/opt/airflow/requirements.txt
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
     - ./airflow/plugins:/opt/airflow/plugins
-    - ./data:/opt/airflow/data
     - ./src:/opt/airflow/src
-  user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-0}"
+    - ./data:/opt/airflow/data
+    - ./mlruns:/opt/airflow/mlruns
+  user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
-    - postgres
-    - mlflow
+    postgres:
+      condition: service_healthy
 
 services:
   postgres:
@@ -35,56 +36,81 @@ services:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 5s
+      retries: 10
+      start_period: 5s
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres-db-volume:/var/lib/postgresql/data
+    ports:
+      - "5433:5432" # libre local
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        set -e
+        airflow db migrate
+        airflow users create \
+          --username "$${_AIRFLOW_WWW_USER_USERNAME}" \
+          --password "$${_AIRFLOW_WWW_USER_PASSWORD}" \
+          --firstname Admin --lastname Admin --role Admin \
+          --email admin@example.com
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   airflow-webserver:
     <<: *airflow-common
     command: webserver
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 10s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
 
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
-    environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      PYTHONPATH: /opt/airflow:/opt/airflow/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
 
-  airflow-init:
-    <<: *airflow-common
-    entrypoint: ""
-    command: >
-      bash -c "airflow db init &&
-      airflow users create --role Admin --username admin --password admin --firstname Admin --lastname User --email admin@example.com"
-    environment:
-      PYTHONPATH: /opt/airflow:/opt/airflow/src
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.0
+    command: mlflow server --host 0.0.0.0 --port 5001 --backend-store-uri /mlflow --default-artifact-root /mlflow
+    volumes:
+      - ./mlruns:/mlflow
+    ports:
+      - "5001:5001"
 
   api:
     build:
       context: ./api
       dockerfile: Dockerfile
     environment:
-      MODEL_PATH: /mnt/shared/models/model.joblib
+      - MLFLOW_TRACKING_URI=http://mlflow:5001
     volumes:
-      - ./data:/mnt/shared
+      - ./data:/app/data
+      - ./mlruns:/app/mlruns
     ports:
       - "8000:8000"
     depends_on:
-      - airflow-webserver
-
-  mlflow:
-    image: ghcr.io/mlflow/mlflow:latest
-    command: >
-      mlflow server
-      --backend-store-uri /mlruns
-      --default-artifact-root /mlruns
-      --host 0.0.0.0
-      --port 5000
-    ports:
-      - "5001:5000"
-    volumes:
-      - ./mlruns:/mlruns
+      mlflow:
+        condition: service_started
 
 volumes:
-  pgdata:
+  postgres-db-volume:

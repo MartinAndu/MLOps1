@@ -82,25 +82,20 @@ En otras palabras, a partir de información como la marca del producto, el preci
 
 ---
 
-## Despliegue
+## Quickstart
+```bash
+docker compose pull
+docker compose build
+docker compose up airflow-init
+docker compose up -d
 
-1. Construir imágenes:
-   ```bash
-   docker compose build
-   ```
+```
 
-2. Inicializar Airflow:
-   ```bash
-   docker compose up airflow-init
-   ```
-
-3. Levantar todos los servicios:
-   ```bash
-   docker compose up -d
-   ```
-
----
-
+Para detener y volver a correr un cambio luego de moficiar el docker-componse.yml realizar lo siguiente
+```bash
+docker compose down
+docker compose up -d
+```
 
 ## Uso con Makefile
 
