@@ -74,6 +74,8 @@ Esta predicción permite analizar patrones de promociones y entender cómo varí
 
 ### 2️⃣ Pasos para levantar los servicios
 
+**Requisito**: tener instalado **Docker Desktop**
+
 Ejecutar en el directorio raíz del proyecto:
 
 ```bash
