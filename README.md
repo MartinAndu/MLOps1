@@ -51,110 +51,132 @@ Todo se despliega con **Docker Compose**.
 
 ---
 
-
 ## Descripción del modelo
 
 El modelo implementado en este trabajo utiliza datos de **productos, sucursales y comercios** para predecir el **porcentaje de descuento aplicado a un producto en promoción**.
 
-En otras palabras, a partir de información como la marca del producto, el precio de lista, la sucursal y el tipo de comercio, el modelo estima cuánto representa el descuento sobre el precio final. Esta predicción permite analizar patrones de promociones y entender cómo varían los descuentos según diferentes características del producto y del punto de venta.
-
-
-## Flujo de trabajo (Airflow)
-
-1. **ETL (`etl.py`)**:
-    - Lee los CSV crudos desde `data/raw/`.
-    - Construye `df.pkl` replicando las transformaciones de la notebook:
-        - Filtrado de promociones.
-        - Cálculo de `descuento`.
-        - Preparación de `sucursales` y `comercio`.
-        - Merge final y mapeo de provincias.
-
-2. **Split (`preprocess.py`)**:
-    - Genera `data/processed/splits.joblib` con train/test.
-
-3. **Entrenamiento y evaluación (`train.py`)**:
-    - Entrena el modelo con GridSearchCV.
-    - Registra parámetros, métricas y artefactos en **MLflow**.
-    - Persiste el modelo en `data/models/model.joblib` y métricas en `data/models/metrics.json`.
-
-4. **Reporte (`evaluate.py`)**:
-    - Copia métricas a `data/processed/metrics.json`.
+A partir de información como la marca del producto, el precio de lista, la sucursal y el tipo de comercio, el modelo estima cuánto representa el descuento sobre el precio final.  
+Esta predicción permite analizar patrones de promociones y entender cómo varían los descuentos según diferentes características del producto y del punto de venta.
 
 ---
 
-## Quickstart
+## 🚀 Cómo levantar el proyecto correctamente
+
+### 1️⃣ Requisitos previos
+
+- **Docker** y **Docker Compose** instalados.
+- Archivo `.env` en la raíz con:
+  ```bash
+  MLFLOW_TRACKING_URI=http://mlflow:5000
+  ```
+
+---
+
+### 2️⃣ Pasos para levantar los servicios
+
+Ejecutar en el directorio raíz del proyecto:
+
 ```bash
-docker compose pull
+# 1. Apagar cualquier instancia previa y eliminar volúmenes
+docker compose down -v
+
+# 2. Reconstruir las imágenes
 docker compose build
+
+# 3. Inicializar la base de datos y el usuario admin de Airflow
+docker compose up airflow-init
+# Esperar a que termine con "exit code 0" (puede tardar unos segundos)
+
+# 4. Levantar todos los servicios
+docker compose up -d
+```
+
+Una vez levantado, verificar con:
+```bash
+docker compose ps
+```
+Deberías ver `airflow-webserver`, `airflow-scheduler`, `mlflow`, `api` y `postgres` en estado “Up”.
+
+---
+
+### ⚠️ Si aparece el error
+> `ERROR: You need to initialize the database. Please run airflow db init`
+
+Entonces ejecutar nuevamente los pasos de inicialización completa:
+
+```bash
+# 1. Apagar todo y eliminar volúmenes viejos
+docker compose down -v
+
+# 2. Eliminar el volumen pgdata si quedó colgado
+docker volume ls | grep pgdata
+docker volume rm <nombre-del-volumen>
+
+# 3. Volver a construir e inicializar
+docker compose build --no-cache
 docker compose up airflow-init
 docker compose up -d
-
 ```
 
-Para detener y volver a correr un cambio luego de moficiar el docker-componse.yml realizar lo siguiente
-```bash
-docker compose down
-docker compose up -d
-```
+Esto garantiza que Airflow inicialice correctamente su base de datos antes de levantar el scheduler y el webserver.  
+En macOS es común que quede un volumen previo de Postgres; estos pasos lo resuelven.
+
+---
 
 ## Uso con Makefile
 
-Para simplificar el ciclo de vida de los contenedores, este proyecto incluye un `Makefile` con los siguientes comandos:
+Para simplificar los comandos:
 
 ```bash
-# Construye las imágenes de Airflow (sin usar caché)
+# Construir imágenes sin caché
 make build
 
-# Inicializa la base de datos de Airflow y crea usuario admin/admin
+# Inicializar base de datos de Airflow
 make init
 
-# Levanta todos los servicios en segundo plano
+# Levantar todos los servicios
 make start
 
-# Reinicia solo los contenedores de Airflow (webserver y scheduler)
+# Reiniciar solo los contenedores de Airflow
 make restart
-````
-
-
-## Servicios y puertos
-
-- **Airflow Webserver:** [http://localhost:8080](http://localhost:8080)  
-  Usuario: `admin` — Contraseña: `admin`
-
-- **MLflow Tracking UI:** [http://localhost:5001](http://localhost:5001)
-
-- **FastAPI (servicio de predicción):** [http://localhost:8000](http://localhost:8000)
+```
 
 ---
 
-## Modificar algo de forma local
+## Servicios y puertos
 
-Despues de corregir correr
+| Servicio | URL | Descripción |
+|-----------|-----|-------------|
+| **Airflow Webserver** | [http://localhost:8080](http://localhost:8080) | Orquestador de tareas (DAGs) |
+| **MLflow Tracking UI** | [http://localhost:5001](http://localhost:5001) | Registro de experimentos |
+| **FastAPI (servicio de predicción)** | [http://localhost:8000](http://localhost:8000) | API REST del modelo |
+| **PostgreSQL** | Interno | Base de datos del orquestador |
 
-   ```bash
-   docker compose restart airflow-webserver airflow-scheduler 
-   ```
+**Credenciales de Airflow:**  
+Usuario: `admin`  
+Contraseña: `admin`
 
+---
 
 ## Ejecución del pipeline
 
-1. Ingresar a la interfaz de Airflow.
+1. Ingresar a [http://localhost:8080](http://localhost:8080).
 2. Activar el DAG `tp_final_ml_pipeline`.
-3. Ejecutarlo manualmente o esperar la ejecución programada.
+3. Ejecutarlo manualmente (Trigger DAG).
+4. Verificar en **MLflow UI** las métricas y artefactos generados.
 
-Los artefactos generados incluyen:
-- `data/df.pkl` (dataset procesado)
-- `data/models/model.joblib` (modelo entrenado)
-- `data/models/metrics.json` (métricas del modelo)
-- Registro completo en **MLflow** (`./mlruns` + UI en puerto 5001)
+**Artefactos esperados:**
+- `data/df.pkl` – dataset procesado.
+- `data/processed/splits.joblib` – particiones de entrenamiento/prueba.
+- `data/models/model.joblib` – modelo entrenado.
+- `data/models/metrics.json` – métricas del modelo.
+- `data/processed/metrics.json` – métricas copiadas para reporte.
 
 ---
 
 ## Uso de la API
 
-La API expone un endpoint `POST /predict` que recibe los atributos principales y devuelve la predicción de descuento.
-
-### Ejemplo
+La API expone un endpoint `POST /predict` que recibe los atributos principales y devuelve la predicción de descuento:
 
 ```bash
 curl -X POST http://localhost:8000/predict   -H "Content-Type: application/json"   -d '{
@@ -174,41 +196,32 @@ Respuesta esperada:
 
 ---
 
-## Notas adicionales
+## Notas técnicas
 
-- La lógica del ETL replica fielmente la notebook entregada.
-- El modelo se entrena y evalúa dentro de un Pipeline de `scikit-learn` para garantizar consistencia entre entrenamiento y predicción.
-- Si los CSV no están presentes en `data/raw/`, el ETL genera un dataset vacío para que el DAG no falle.
-- Para entornos productivos se recomienda asegurar persistencia de `mlruns/` en un almacenamiento remoto y configurar seguridad en Airflow y FastAPI.
+- El ETL replica la notebook original con la misma lógica de transformaciones.
+- Los datos crudos se pueden obtener desde el Drive compartido o copiar a `data/raw/`.
+- Airflow coordina la ejecución de todas las etapas: `etl → split → train_eval → report`.
+- Si MLflow no está disponible, el sistema registra localmente los experimentos en `/opt/airflow/mlruns`.
 
 ---
 
 ## Pendientes para cumplir con el enunciado del TP
 
-Actualmente el proyecto está en proceso de integración con Apache Airflow.  
-Los siguientes puntos aún no están finalizados y se deben resolver para cumplir con los requisitos mínimos:
+1. **Ejecución completa del DAG:**  
+   Ajustar Airflow para que corra de inicio a fin sin errores de base de datos.
 
-1. **Ejecución del DAG**
-   - El DAG `tp_final_ml_pipeline` todavía no corre de manera exitosa en Airflow.
-   - El scheduler no se encuentra funcionando correctamente (problemas de inicialización de la base de datos).
-   - Es necesario lograr que al menos una corrida completa del DAG se ejecute de inicio a fin.
+2. **Integración plena con MLflow:**  
+   Confirmar registro de experimentos y parámetros desde el pipeline.
 
-2. **MLflow – Búsqueda de hiperparámetros**
-   - Se debe agregar la configuración de un experimento en MLflow para registrar ejecuciones de búsqueda de hiperparámetros.
-   - Actualmente MLflow está levantado, pero no se está integrando desde el código del DAG ni del modelo.
+3. **Validación de la API:**  
+   Verificar que el servicio FastAPI cargue el modelo generado por Airflow.
 
-3. **API REST – Servir el modelo**
-   - El servicio FastAPI está configurado y expuesto, pero falta garantizar que efectivamente cargue y sirva el modelo entrenado en el DAG.
-   - Debe poder responder a solicitudes de predicción usando el modelo generado en el pipeline.
-
-4. **Documentación y limpieza final**
-   - Incluir docstrings y comentarios explicativos en todos los scripts (`etl.py`, `train.py`, etc.).
-   - Validar que la documentación automática de FastAPI refleje correctamente los parámetros de entrada y salida del modelo.
-   - Ajustar el `README.md` final con las instrucciones completas de instalación, ejecución de Airflow, MLflow y API.
+4. **Documentación y limpieza final:**  
+   Incluir docstrings, comentarios y actualización final del README.
 
 ---
 
-## Integrantes
+## 👥 Integrantes
 
 - **a2110 – Ceballos, Luciano**
 - **a2102 – Andújar, Martín Rodrigo**

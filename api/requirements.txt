@@ -6,3 +6,6 @@ pandas
 scikit-learn
 joblib
 gdown
+dill
+cloudpickle
+scikit-learn
