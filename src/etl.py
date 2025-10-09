@@ -293,7 +293,7 @@ def build_dataset(base_dir: str) -> str:
     out_pkl.parent.mkdir(parents=True, exist_ok=True)
     df.to_pickle(out_pkl)
     print(f"[ETL] Dataset final guardado en {out_pkl} con shape={df.shape}")
-    return str(out_pkl)
+    return str(base_dir)
 
 
 if __name__ == "__main__":
