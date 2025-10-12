@@ -227,4 +227,3 @@ Respuesta esperada:
 
 - **a2110 – Ceballos, Luciano**
 - **a2102 – Andújar, Martín Rodrigo**
-- **a2125 – Otonelo Canale, Nahuel Elías**

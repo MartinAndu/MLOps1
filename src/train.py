@@ -24,18 +24,37 @@ NUM_COLS = ["productos_precio_lista"]
 TARGET = "descuento"
 
 def _setup_mlflow() -> None:
+    import time
+    from mlflow.tracking import MlflowClient
+
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
-    try:
-        mlflow.set_tracking_uri(tracking_uri)
-        # “ping” rápido al servidor
-        MlflowClient().list_experiments()
-        print(f"[MLflow] Usando servidor: {tracking_uri}")
-    except Exception as e:
-        # Fallback a file store local para no romper la tarea
-        local_uri = "file:///opt/airflow/mlruns"
-        mlflow.set_tracking_uri(local_uri)
-        print(f"[MLflow][WARN] No se pudo conectar a {tracking_uri}: {e}")
-        print(f"[MLflow] Fallback a store local: {local_uri}")
+    mlflow.set_tracking_uri(tracking_uri)
+
+    last_err = None
+    for i in range(10):
+        try:
+            client = MlflowClient()
+
+            # MLflow 2.x
+            try:
+                client.search_experiments(max_results=1)
+            except TypeError:
+                # MLflow 1.x
+                _ = client.list_experiments()
+
+            print(f"[MLflow] Conectado a {tracking_uri}")
+            return
+        except Exception as e:
+            last_err = e
+            print(f"[MLflow] Intento {i+1}/10: todavía no responde ({e}). Retrying...")
+            time.sleep(3)
+
+    # Fallback local tras 10 intentos
+    local_uri = "file:///opt/airflow/mlruns"
+    mlflow.set_tracking_uri(local_uri)
+    print(f"[MLflow][WARN] No se pudo conectar a {tracking_uri} tras 10 intentos: {last_err}")
+    print(f"[MLflow] Fallback a store local: {local_uri}")
+
 
 def _build_pipeline() -> Pipeline:
     pre = ColumnTransformer(
