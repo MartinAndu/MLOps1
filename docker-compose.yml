@@ -46,6 +46,9 @@ services:
 
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
+    environment:
+      # Desactiva el chequeo del Host header (evita "Invalid Host header / DNS rebinding")
+      MLFLOW_SERVER_DISABLE_SECURITY_MIDDLEWARE: "true"
     command: >
       mlflow server
       --backend-store-uri /mlruns
@@ -53,12 +56,13 @@ services:
       --host 0.0.0.0
       --port 5000
     ports:
-      - "5001:5000"
+      - "5001:5000"           # UI en http://localhost:5001
     volumes:
       - ./mlruns:/mlruns
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:5000\"); print(1)' || exit 1"]
-      interval: 5s
+      # Healthcheck simple por GET /
+      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request,sys\nsys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/', timeout=3).status==200 else 1)\nPY"]
+      interval: 10s
       timeout: 5s
       retries: 20
 

@@ -35,12 +35,11 @@ def _setup_mlflow() -> None:
         try:
             client = MlflowClient()
 
-            # MLflow 2.x
-            try:
+            # Intento de ping cross-version (MLflow 1.x → 3.x)
+            if hasattr(client, "search_experiments"):
                 client.search_experiments(max_results=1)
-            except TypeError:
-                # MLflow 1.x
-                _ = client.list_experiments()
+            else:
+                client.list_experiments()
 
             print(f"[MLflow] Conectado a {tracking_uri}")
             return
@@ -54,7 +53,6 @@ def _setup_mlflow() -> None:
     mlflow.set_tracking_uri(local_uri)
     print(f"[MLflow][WARN] No se pudo conectar a {tracking_uri} tras 10 intentos: {last_err}")
     print(f"[MLflow] Fallback a store local: {local_uri}")
-
 
 def _build_pipeline() -> Pipeline:
     pre = ColumnTransformer(
