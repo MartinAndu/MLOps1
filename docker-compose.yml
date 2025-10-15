@@ -113,5 +113,22 @@ services:
     depends_on:
       - airflow-webserver
 
+  streamlit:
+    build:
+      context: ./streamlit
+      dockerfile: Dockerfile
+    environment:
+      API_URL: http://api:8000
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    volumes:
+      - ./streamlit:/app
+      - ./data:/mnt/shared
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+      - mlflow
+
+
 volumes:
   pgdata:

@@ -2,3 +2,4 @@
 airflow/
 data/
 src/__pycache__/
+mlruns/
