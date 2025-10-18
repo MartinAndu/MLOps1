@@ -1,3 +1,20 @@
+"""
+Servicio API con FastAPI para la predicción de porcentajes de descuento.
+
+Este módulo implementa una API REST que carga un modelo de Machine Learning
+pre-entrenado y expone endpoints para verificar la salud del servicio y
+realizar predicciones.
+
+El modelo se carga bajo demanda la primera vez que se necesita y se mantiene
+en una caché en memoria para peticiones subsiguientes. La ruta del modelo
+se puede configurar a través de la variable de entorno `MODEL_PATH`.
+
+Endpoints disponibles:
+- GET /health: Verifica la disponibilidad del servicio y del modelo.
+- POST /predict: Recibe datos de un producto y devuelve el descuento predicho.
+"""
+
+
 from __future__ import annotations
 
 import os
