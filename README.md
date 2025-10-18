@@ -33,6 +33,11 @@ Todo se despliega con **Docker Compose**.
 │   ├── evaluate.py              # Reporte de métricas
 │   └── predict_batch.py         # Predicción batch opcional
 │
+├── streamlit/                   # Dashboard interactivo para generar las predicciones
+│   ├── app.py                   # Aplicacion que genera el dashboard interactivo
+│   ├── requirements.txt         # Dependencias del modulo
+│   └── Dockerfile               # Imagen de Streamlit
+│
 ├── data/                        # Carpeta compartida entre servicios
 │   ├── raw/                     # CSV crudos (entrada: productos.csv, sucursales.csv, comercio.csv)
 │   ├── processed/               # Datos procesados (splits, métricas)
@@ -152,6 +157,7 @@ make restart
 | **Airflow Webserver** | [http://localhost:8080](http://localhost:8080) | Orquestador de tareas (DAGs) |
 | **MLflow Tracking UI** | [http://localhost:5001](http://localhost:5001) | Registro de experimentos |
 | **FastAPI (servicio de predicción)** | [http://localhost:8000](http://localhost:8000) | API REST del modelo |
+| **Streamlit** | [http://localhost:8501](http://localhost:8501) | Dashboard interactivo |
 | **PostgreSQL** | Interno | Base de datos del orquestador |
 
 **Credenciales de Airflow:**  
@@ -166,6 +172,7 @@ Contraseña: `admin`
 2. Activar el DAG `tp_final_ml_pipeline`.
 3. Ejecutarlo manualmente (Trigger DAG).
 4. Verificar en **MLflow UI** las métricas y artefactos generados.
+5. Consumir la api mediante la interfaz disponibilizada en [http://localhost:8501](http://localhost:8501).
 
 **Artefactos esperados:**
 - `data/df.pkl` – dataset procesado.
@@ -204,22 +211,6 @@ Respuesta esperada:
 - Los datos crudos se pueden obtener desde el Drive compartido o copiar a `data/raw/`.
 - Airflow coordina la ejecución de todas las etapas: `etl → split → train_eval → report`.
 - Si MLflow no está disponible, el sistema registra localmente los experimentos en `/opt/airflow/mlruns`.
-
----
-
-## Pendientes para cumplir con el enunciado del TP
-
-1. **Ejecución completa del DAG:**  
-   Ajustar Airflow para que corra de inicio a fin sin errores de base de datos.
-
-2. **Integración plena con MLflow:**  
-   Confirmar registro de experimentos y parámetros desde el pipeline.
-
-3. **Validación de la API:**  
-   Verificar que el servicio FastAPI cargue el modelo generado por Airflow.
-
-4. **Documentación y limpieza final:**  
-   Incluir docstrings, comentarios y actualización final del README.
 
 ---
 

@@ -1,3 +1,26 @@
+"""
+DAG de Pipeline de ML para Predicción de Descuentos
+
+Este DAG orquesta el pipeline de machine learning de principio a fin para predecir 
+el porcentaje de descuento en productos de supermercado.
+
+Flujo del Pipeline:
+1.  ETL: Extrae los datos crudos, los procesa y construye un dataset limpio 
+    (guardado como `data/df.pkl`).
+2.  Split: Divide el dataset limpio en conjuntos de entrenamiento y prueba.
+3.  Train & Evaluate: Entrena un modelo de machine learning con el conjunto de 
+    entrenamiento, lo evalúa y guarda tanto el modelo como sus métricas.
+4.  Report: Genera y exporta un reporte final con las métricas de evaluación 
+    del modelo.
+
+Dependencias entre tareas:
+- `etl` -> `split`
+- `etl` -> `train_eval` -> `report`
+
+El DAG está configurado para ejecutarse diariamente.
+"""
+
+
 from datetime import datetime
 from airflow.decorators import dag, task
 

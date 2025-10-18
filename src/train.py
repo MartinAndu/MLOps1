@@ -1,3 +1,21 @@
+"""
+Módulo para el entrenamiento, evaluación y registro del modelo de ML.
+
+Este script contiene la lógica completa para el pipeline de entrenamiento:
+1.  Carga los datos preprocesados (splits de entrenamiento y prueba).
+2.  Define y construye un pipeline de Scikit-learn para el preprocesamiento
+    y el modelado (RandomForestRegressor).
+3.  Configura la conexión con el servidor de MLflow.
+4.  Ejecuta un GridSearch con validación cruzada para encontrar los mejores
+    hiperparámetros.
+5.  Registra el experimento, los parámetros, las métricas y el modelo final
+    en MLflow.
+6.  Publica el mejor modelo en el Model Registry de MLflow.
+7.  Guarda los artefactos del modelo (modelo y métricas) localmente para
+    su uso por otros servicios como la API.
+"""
+
+
 # src/train.py
 from __future__ import annotations
 
@@ -35,14 +53,26 @@ REGISTERED_MODEL_NAME = os.getenv("REGISTERED_MODEL_NAME", "descuento-predictor"
 # Utilidades
 # ----------------------------
 def _safe_mkdir(p: Path) -> None:
+    """Crea un directorio de forma segura, incluyendo directorios padres."""
     p.mkdir(parents=True, exist_ok=True)
 
 
 def _to_numeric(s: pd.Series) -> pd.Series:
+    """Convierte una Serie de Pandas a tipo numérico, forzando errores a NaN."""
     return pd.to_numeric(s, errors="coerce")
 
 
 def _compute_metrics(y_true: pd.Series, y_pred: np.ndarray) -> Dict[str, float]:
+    """
+    Calcula un conjunto de métricas de regresión.
+
+    Args:
+        y_true: Valores reales del objetivo.
+        y_pred: Valores predichos por el modelo.
+
+    Returns:
+        Un diccionario con las métricas: MAE, RMSE y R2.
+    """
     mae = float(mean_absolute_error(y_true, y_pred))
     rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
     r2 = float(r2_score(y_true, y_pred))
@@ -50,6 +80,17 @@ def _compute_metrics(y_true: pd.Series, y_pred: np.ndarray) -> Dict[str, float]:
 
 
 def _build_pipeline() -> Pipeline:
+    """
+    Construye el pipeline de preprocesamiento y modelado de Scikit-learn.
+
+    El pipeline consiste en:
+    1.  Un preprocesador que aplica One-Hot Encoding a las columnas
+        categóricas y deja pasar las numéricas.
+    2.  Un regresor RandomForest como modelo predictivo.
+
+    Returns:
+        El pipeline de Scikit-learn sin entrenar.
+    """
     pre = ColumnTransformer(
         transformers=[
             ("cat", OneHotEncoder(drop="first", handle_unknown="ignore"), CAT_COLS),
@@ -64,8 +105,12 @@ def _build_pipeline() -> Pipeline:
 
 def _setup_mlflow() -> None:
     """
-    Configura el tracking de MLflow con reintentos y compatibilidad 1.x → 3.x.
-    Evita falsos negativos por cambios de API (`list_experiments` vs `search_experiments`).
+    Configura y verifica la conexión con el servidor de tracking de MLflow.
+
+    Intenta conectarse al URI de tracking especificado en las variables de
+    entorno con varios reintentos. Si la conexión falla, revierte a un
+    directorio de tracking local como fallback. Esto asegura robustez en
+    entornos donde el servidor MLflow puede tardar en iniciarse.
     """
     import time
 
@@ -103,6 +148,21 @@ def _setup_mlflow() -> None:
 # Entrenamiento + registro
 # ----------------------------
 def _load_splits(splits_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+    """
+    Carga los conjuntos de datos de entrenamiento y prueba desde un archivo.
+
+    También se asegura de que las columnas esperadas existan y tengan los
+    tipos de datos correctos antes de devolverlos.
+
+    Args:
+        splits_path: La ruta al archivo `splits.joblib`.
+
+    Returns:
+        Una tupla con los cuatro DataFrames/Series: X_train, X_test, y_train, y_test.
+
+    Raises:
+        FileNotFoundError: Si el archivo `splits.joblib` no existe.
+    """
     if not splits_path.exists():
         raise FileNotFoundError(f"[TRAIN] No existe {splits_path}. Corra primero el split.")
     Xtr, Xte, ytr, yte = joblib.load(splits_path)
@@ -128,9 +188,23 @@ def _load_splits(splits_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Seri
 
 def train_and_evaluate(base_dir: str) -> str:
     """
-    Entrena el modelo a partir de base_dir/processed/splits.joblib,
-    registra un GridSearch en MLflow y publica el mejor modelo en el Model Registry.
-    Además, guarda artefactos locales en base_dir/models/.
+    Orquesta el ciclo completo de entrenamiento, evaluación y registro del modelo.
+
+    Esta función principal ejecuta los siguientes pasos:
+    1.  Carga los datos divididos.
+    2.  Configura MLflow.
+    3.  Realiza una búsqueda de hiperparámetros con GridSearchCV.
+    4.  Entrena el mejor modelo con todos los datos de entrenamiento.
+    5.  Evalúa el modelo en el conjunto de prueba.
+    6.  Registra todo el proceso en un run de MLflow (parámetros, métricas, modelo).
+    7.  Registra el modelo en el Model Registry de MLflow para versionado.
+    8.  Guarda los artefactos (modelo y métricas) en el sistema de archivos local.
+
+    Args:
+        base_dir: La ruta al directorio de datos base (ej. '/opt/airflow/data').
+
+    Returns:
+        La ruta completa al archivo del modelo serializado (`model.joblib`).
     """
     base = Path(base_dir)
     splits_path = base / "processed" / "splits.joblib"

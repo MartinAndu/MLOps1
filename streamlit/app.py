@@ -1,3 +1,26 @@
+"""
+Dashboard interactivo para el monitoreo del pipeline de predicción de descuentos.
+
+Esta aplicación, desarrollada con Streamlit, sirve como interfaz de usuario para
+interactuar con el modelo de machine learning y visualizar los resultados de los
+experimentos.
+
+Funcionalidades Principales:
+-   Página de 'Predicciones': Permite a los usuarios ingresar datos de un producto
+    (ID de bandera, marca, precio) para obtener una predicción de descuento en
+    tiempo real. Esta página se comunica con una API REST para realizar la
+    predicción.
+-   Página de 'Experimentos MLflow': Se conecta a un servidor de MLflow para
+    visualizar los experimentos de entrenamiento. Muestra una lista de los
+    experimentos y, al seleccionar uno, presenta los 'runs' asociados con
+    sus métricas y parámetros, facilitando el seguimiento del rendimiento.
+
+Configuración (Variables de Entorno):
+-   API_URL: La dirección del endpoint de la API de predicción.
+    (default: http://localhost:8000)
+-   MLFLOW_TRACKING_URI: La dirección del servidor de tracking de MLflow.
+    (default: http://localhost:5000)
+"""
 import streamlit as st
 import requests
 import pandas as pd
@@ -13,23 +36,29 @@ mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
 st.set_page_config(
     page_title="ML Pipeline Dashboard",
-    page_icon="🤖",
     layout="wide"
 )
 
-st.title("🤖 ML Pipeline Dashboard")
+st.title("Dashboard del modelo generado")
+
+st.markdown("""
+El objetivo de este proyecto es **predecir el porcentaje de descuento (descuento)** en productos de supermercado utilizando datos de **Precios Claros - Base SEPA** (Sistema Electrónico de Publicidad de Precios Argentinos).
+""")
+# Link a MLflow UI
+st .markdown(f"Fuente de datos [SEPA](https://datos.gob.ar/dataset/produccion-precios-claros---base-sepa)")
+
 
 # Sidebar
 with st.sidebar:
     st.header("Navegación")
     page = st.radio(
         "Selecciona una página",
-        ["Predicciones", "Métricas del Modelo", "Experimentos MLflow"]
+        ["Predicciones", "Experimentos MLflow"]
     )
 
 # Página de Predicciones
 if page == "Predicciones":
-    st.header("📊 Realizar Predicciones")
+    st.header("Realizar Predicciones")
     
     st.subheader("Ingresa los datos para predicción")
     
@@ -71,39 +100,9 @@ if page == "Predicciones":
         except Exception as e:
             st.error(f"Error al conectar con la API: {str(e)}")
 
-# Página de Métricas del Modelo
-elif page == "Métricas del Modelo":
-    st.header("📈 Métricas del Modelo")
-    
-    try:
-        # Obtener métricas de la API
-        response = requests.get(f"{API_URL}/metrics")
-        
-        if response.status_code == 200:
-            metrics = response.json()
-            
-            # Mostrar métricas en columnas
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Accuracy", f"{metrics.get('accuracy', 0):.4f}")
-            with col2:
-                st.metric("Precision", f"{metrics.get('precision', 0):.4f}")
-            with col3:
-                st.metric("Recall", f"{metrics.get('recall', 0):.4f}")
-            
-            # Si hay más métricas, mostrarlas en una tabla
-            st.subheader("Todas las Métricas")
-            df_metrics = pd.DataFrame([metrics])
-            st.dataframe(df_metrics, use_container_width=True)
-        else:
-            st.warning("No se pudieron obtener las métricas")
-    except Exception as e:
-        st.error(f"Error al obtener métricas: {str(e)}")
-
 # Página de Experimentos MLflow
 elif page == "Experimentos MLflow":
-    st.header("🔬 Experimentos MLflow")
+    st.header("Experimentos MLflow")
     
     try:
         # Obtener experimentos de MLflow

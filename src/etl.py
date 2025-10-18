@@ -1,17 +1,33 @@
+"""
+Módulo ETL para la construcción del dataset de predicción de descuentos.
+
+Este script maneja el proceso completo de Extracción, Transformación y Carga:
+1.  Extracción (Extract):
+    - Verifica la existencia de archivos CSV en el directorio 'data/raw'.
+    - Si no existen, descarga automáticamente los datos desde una carpeta
+      pública de Google Drive utilizando `gdown`.
+    - Mapea los nombres de archivo descargados (ej. 'producto_....csv') a
+      nombres estandarizados ('productos.csv', 'sucursales.csv', etc.).
+
+2.  Transformación (Transform):
+    - Lee los archivos CSV de forma robusta, probando múltiples separadores
+      y codificaciones.
+    - Calcula la columna objetivo `descuento` a partir de los precios de lista
+      y los precios promocionales.
+    - Combina (merge) los datos de productos, sucursales y comercios.
+    - Realiza limpieza de datos y mapea códigos de provincia a nombres completos.
+
+3.  Carga (Load):
+    - Guarda el DataFrame final y limpio en formato pickle (`data/df.pkl`),
+      listo para ser utilizado en las siguientes etapas del pipeline de ML.
+"""
+
 from pathlib import Path
 import pandas as pd
 import numpy as np
 import shutil
 import re
 import time
-
-"""
-ETL con descarga automática desde Google Drive:
-- Si no existen CSV en /opt/airflow/data/raw, descarga la carpeta de Drive indicada.
-- Busca archivos por nombre (insensible a mayúsculas): *producto*, *sucursal*, *comercio*.
-- Lectura robusta de CSV (prueba separadores y encodings comunes).
-- Replica las transformaciones de la notebook y guarda df.pkl.
-"""
 
 # --- CONFIG ---
 DRIVE_FOLDER_ID = "1lG8QrERAQPhw-iBLtAvkQGS5dZl-V_px"  # carpeta compartida
@@ -87,6 +103,24 @@ COMERCIO_COLS = ["id_bandera", "comercio_bandera_nombre"]
 
 
 def _read_csv_robust(path: Path) -> pd.DataFrame:
+    """
+    Lee un archivo CSV de forma robusta probando diferentes separadores y codificaciones.
+
+    Itera sobre una lista predefinida de configuraciones comunes (separadores
+    '|', ',', ';' y codificaciones 'utf-8', 'latin-1') para encontrar una
+    que permita leer el archivo correctamente.
+
+    Args:
+        path: La ruta al archivo CSV que se va a leer.
+
+    Returns:
+        Un DataFrame de Pandas con los datos del archivo.
+
+    Raises:
+        RuntimeError: Si no se puede leer el archivo con ninguna de las
+                      configuraciones probadas.
+    """
+    
     trials = [
         dict(sep="|", encoding="utf-8"),
         dict(sep=",", encoding="utf-8"),
@@ -109,6 +143,23 @@ def _to_float(s: pd.Series) -> pd.Series:
 
 
 def _pick_existing_column(df: pd.DataFrame, candidates: list[str]) -> str | None:
+    """
+    Busca en una lista de nombres de columnas y devuelve la primera que exista.
+
+    Esta función es útil cuando un campo puede tener diferentes nombres en
+    distintas versiones de un dataset (ej. 'precio_promo', 'precio_promocional').
+    Itera sobre `candidates` y retorna el primer nombre que se encuentre en
+    las columnas del DataFrame.
+
+    Args:
+        df: El DataFrame en el que se buscarán las columnas.
+        candidates: Una lista de nombres de columnas candidatas, en orden
+                    de prioridad.
+
+    Returns:
+        El nombre de la primera columna candidata encontrada, o None si ninguna
+        de las candidatas existe en el DataFrame.
+    """
     for c in candidates:
         if c in df.columns:
             return c
@@ -117,8 +168,22 @@ def _pick_existing_column(df: pd.DataFrame, candidates: list[str]) -> str | None
 
 def _download_drive_folder(folder_id: str, dest_dir: Path, retries: int = 3) -> None:
     """
-    Descarga una carpeta pública de Google Drive usando gdown.
-    Requiere: pip install gdown
+    Descarga el contenido de una carpeta pública de Google Drive de forma robusta.
+
+    Utiliza la biblioteca `gdown` para descargar todos los archivos de la carpeta
+    especificada. La descarga se realiza en un directorio temporal y luego los
+    archivos CSV encontrados se mueven al directorio de destino final.
+    Implementa un mecanismo de reintentos con espera exponencial para manejar
+    errores transitorios de red.
+
+    Args:
+        folder_id: El ID de la carpeta de Google Drive a descargar.
+        dest_dir: La ruta del directorio de destino donde se guardarán los
+                  archivos CSV.
+        retries: El número máximo de intentos de descarga en caso de error.
+
+    Raises:
+        RuntimeError: Si la descarga falla después de todos los reintentos.
     """
     import gdown  # instalado por airflow/requirements.txt
 
@@ -157,7 +222,19 @@ def _download_drive_folder(folder_id: str, dest_dir: Path, retries: int = 3) -> 
 
 def _ensure_raw_from_drive(raw: Path) -> None:
     """
-    Si no hay CSV en raw, descarga la carpeta de Drive y mapea archivos a nombres esperados.
+    Asegura que los archivos CSV sin procesar estén disponibles y estandarizados.
+
+    Verifica si existen archivos CSV en el directorio `raw`. Si no, los descarga
+    desde Google Drive. Luego, estandariza los nombres de los archivos encontrados
+    (ej. 'producto_2023.csv' -> 'productos.csv') para que las etapas posteriores
+    puedan encontrarlos de manera predecible.
+
+    Args:
+        raw: La ruta al directorio de datos sin procesar (ej. 'data/raw').
+
+    Raises:
+        FileNotFoundError: Si no se encuentran archivos CSV ni localmente ni
+                           después de intentar la descarga desde Drive.
     """
     need_download = not any(raw.glob("*.csv"))
     if need_download:
@@ -191,6 +268,26 @@ def _ensure_raw_from_drive(raw: Path) -> None:
 
 
 def build_dataset(base_dir: str) -> str:
+    """
+    Orquesta el proceso ETL completo para construir y guardar el dataset final.
+
+    Esta es la función principal del módulo. Ejecuta la secuencia completa de
+    pasos de ETL:
+    1.  Asegura la disponibilidad de los datos de origen (`_ensure_raw_from_drive`).
+    2.  Lee los archivos CSV de productos, sucursales y comercios.
+    3.  Calcula la columna objetivo `descuento`.
+    4.  Combina los DataFrames en un único dataset.
+    5.  Realiza transformaciones finales (ej. mapeo de provincias).
+    6.  Guarda el DataFrame procesado como un archivo pickle (`df.pkl`).
+
+    Args:
+        base_dir: La ruta al directorio de datos base (ej. '/opt/airflow/data'),
+                  que contiene la subcarpeta 'raw'.
+
+    Returns:
+        La misma ruta del directorio base, para permitir el encadenamiento de
+        tareas en un pipeline como Airflow.
+    """
     base = Path(base_dir)
     raw = base / "raw"
     out_pkl = base / "df.pkl"
